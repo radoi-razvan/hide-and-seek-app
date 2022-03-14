@@ -27,16 +27,17 @@ namespace HideAndSeek.Controllers
         public async Task<ActionResult<string>> EncryptFile([FromForm] CryptographyDTO fileData)
         {
             string encryptedFile;
+            string message;
             try
             {
                 encryptedFile = await _cryptographyService.Encrypt(fileData);
+                message = await _cryptographyService.CreateFile(fileData, encryptedFile);
             }
             catch (Exception)
             {
                 return BadRequest("Operation failed!");
             }
 
-            string message = await _cryptographyService.CreateFile(fileData, encryptedFile);
             _logger.LogInformation("Operation successful");
             return CreatedAtAction("EncryptFile", message);
         }
@@ -47,9 +48,11 @@ namespace HideAndSeek.Controllers
         public async Task<ActionResult<string>> DecryptFile([FromForm] CryptographyDTO fileData)
         {
             string decryptedFile;
+            string message;
             try
             {
                 decryptedFile = await _cryptographyService.Decrypt(fileData);
+                message = await _cryptographyService.CreateFile(fileData, decryptedFile);
             }
             catch (InvalidOperationException)
             {
@@ -60,7 +63,6 @@ namespace HideAndSeek.Controllers
                 return BadRequest("Operation failed!");
             }
 
-            string message = await _cryptographyService.CreateFile(fileData, decryptedFile);
             _logger.LogInformation("Operation successful");
             return CreatedAtAction("EncryptFile", message);
         }

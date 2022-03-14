@@ -20,15 +20,58 @@ namespace HideAndSeek.Services
             return memoryStream.ToArray();
         }
 
-
         public async Task<string> Encrypt(CryptographyDTO fileData)
         {
+            string currentDirectory = Directory.GetCurrentDirectory();
+            string currentFilePathString = $"{currentDirectory}\\EncryptedDecryptedFiles";
+            currentFilePathString = Path.Combine(currentFilePathString, $"{fileData.File.FileName}");
+
+            using (FileStream fileStream = File.Create(currentFilePathString))
+            {
+                await fileData.File.CopyToAsync(fileStream);
+            }
+
+            List<string> file = new List<string>();
+            if (fileData.Crc)
+            {
+                file.Add($"{fileData.File.Length};{fileData.Crc}");
+            }
+            else
+            {
+                file.Add(fileData.File.Length.ToString());
+            }
+
+            foreach (string line in File.ReadLines(currentFilePathString))
+            {
+                file.Add(line);
+            }
+
+            if (File.Exists(currentFilePathString))
+            {
+                File.Delete(currentFilePathString);
+            }
+
+            string newFilePathString = $"{currentDirectory}\\EncryptedDecryptedFiles";
+            newFilePathString = Path.Combine(newFilePathString, $"New{fileData.File.FileName}");
+            using (StreamWriter newFile = new(newFilePathString))
+            {
+                foreach (string line in file)
+                {
+                    await newFile.WriteLineAsync(line);
+                }
+            }
+
             byte[] keyBytes = Encoding.Default.GetBytes(fileData.Key);
-            byte[] fileBytes = await GetFileBytes(fileData.File);
+            byte[] fileBytes = File.ReadAllBytes(newFilePathString);
 
             for (int i = 0; i < fileBytes.Length; i++)
             {
                 fileBytes[i] ^= keyBytes[i % keyBytes.Length];
+            }
+
+            if (File.Exists(newFilePathString))
+            {
+                File.Delete(newFilePathString);
             }
 
             return Convert.ToBase64String(fileBytes);
@@ -40,32 +83,17 @@ namespace HideAndSeek.Services
 
             string currentDirectory = Directory.GetCurrentDirectory();
             string pathString = $"{currentDirectory}\\EncryptedDecryptedFiles";
-            pathString = Path.Combine(pathString, $"{fileData.File.FileName}.dec");
+            pathString = Path.Combine(pathString, $"{fileData.File.FileName}");
 
             using (FileStream fileStream = File.Create(pathString))
             {
                 await fileData.File.CopyToAsync(fileStream);
             }
 
-            int counter = 0;
-            int encryptedLineLength = 0;
             StringBuilder encryptedFile = new StringBuilder();
             foreach (string line in File.ReadLines(pathString))
             {
-                if (counter == 0)
-                {
-                    encryptedFile.Append(line);
-                    encryptedLineLength = line.Length;
-                } 
-                else if(counter == 1)
-                {
-                    if (Convert.ToInt64(line) != Convert.ToInt64(encryptedLineLength))
-                    {
-                        throw new InvalidOperationException("Invalid encryption");
-                    }
-                    
-                }
-                counter++;
+                encryptedFile.Append(line);
             }
 
 
@@ -77,12 +105,24 @@ namespace HideAndSeek.Services
                 fileBytes[i] ^= keyBytes[i % keyBytes.Length];
             }
 
+            var result = Encoding.Default.GetString(fileBytes);
+            //var splittedTxt = result.Split("/r/n");
+            //int fileLengthIndex = 0;
+            //int firstLineIndex = 0;
+            //int secondLineIndex = 1;
+            //var fileLength = splittedTxt[firstLineIndex].Split(';')[fileLengthIndex];
+            //var firstLineLength = splittedTxt[secondLineIndex].Length;
+            //if (Convert.ToInt64(fileLength) != Convert.ToInt64(fileData.File.Length)- Convert.ToInt64(firstLineLength))
+            //{
+            //    throw new InvalidOperationException("Invalid encryption");
+            //}
+
             if (File.Exists(pathString))
             {
                 File.Delete(pathString);
             }
 
-            return Encoding.Default.GetString(fileBytes);
+            return result;
         }
 
 
@@ -98,15 +138,6 @@ namespace HideAndSeek.Services
             }
 
             List<string> lines = new() { encryptedFile };
-
-            if (fileData.Operation == "encrypt")
-            {
-                lines.Add(encryptedFile.Length.ToString());
-            }
-            if (fileData.Crc && fileData.Operation == "encrypt")
-            {
-                lines.Add(fileData.Crc.ToString());
-            }
 
             using StreamWriter file = new(pathString);
 
